@@ -12,13 +12,7 @@ const path = require('path');
 const app = express();
 
 // ─── CORS: permite Netlify + localhost ───────────────────────────────────────
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL,
-    'http://localhost:3000',
-    'http://localhost:5500'
-  ]
-}));
+app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'], allowedHeaders: ['Content-Type'] }));
 
 // Raw body para webhook do Stripe (DEVE vir antes do bodyParser.json)
 app.use('/webhook', express.raw({ type: 'application/json' }));
