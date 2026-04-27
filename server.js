@@ -18,12 +18,59 @@ app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'], allowedHeaders: [
 app.use('/webhook', express.raw({ type: 'application/json' }));
 app.use(bodyParser.json());
 
-// ─── TABELA GLOBAL DE PREÇOS ─────────────────────────────────────────────────
-const PRICES = {
-  br: { basico: 900,  medio: 1300, alto: 2000, symbol: 'R$',  currency: 'brl', unlock: 4990  }, // R$49,90
-  us: { basico: 1000, medio: 1600, alto: 2800, symbol: 'USD', currency: 'usd', unlock: 990   }, // $9,90
-  eu: { basico: 900,  medio: 1500, alto: 2700, symbol: '€',   currency: 'eur', unlock: 990   }, // €9,90
-  global: { basico: 700, medio: 1200, alto: 2000, symbol: 'USD', currency: 'usd', unlock: 990 }
+// ─── TABELA DE PREÇOS POR SERVIÇO E REGIÃO ───────────────────────────────────
+const CURRENCY_INFO = {
+  br:     { symbol: 'R$',  currency: 'brl', unlock: 4990 },
+  us:     { symbol: 'USD', currency: 'usd', unlock: 990  },
+  eu:     { symbol: '€',   currency: 'eur', unlock: 990  },
+  global: { symbol: 'USD', currency: 'usd', unlock: 990  }
+};
+
+const SERVICE_PRICES = {
+  br: {
+    pintura:      { basico: 18,   medio: 28,   alto: 45,   unidade: 'm2' },
+    banheiro:     { basico: 900,  medio: 1400, alto: 2200, unidade: 'm2' },
+    cozinha:      { basico: 800,  medio: 1300, alto: 2000, unidade: 'm2' },
+    reforma_geral:{ basico: 850,  medio: 1300, alto: 2000, unidade: 'm2' },
+    eletrica:     { basico: 90,   medio: 130,  alto: 200,  unidade: 'pt' },
+    hidraulica:   { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
+    piso:         { basico: 80,   medio: 130,  alto: 220,  unidade: 'm2' },
+    construcao:   { basico: 1600, medio: 2300, alto: 3800, unidade: 'm2' },
+    fachada:      { basico: 120,  medio: 200,  alto: 350,  unidade: 'm2' }
+  },
+  us: {
+    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm2' },
+    banheiro:     { basico: 800,  medio: 1400, alto: 2500, unidade: 'm2' },
+    cozinha:      { basico: 700,  medio: 1200, alto: 2200, unidade: 'm2' },
+    reforma_geral:{ basico: 900,  medio: 1500, alto: 2800, unidade: 'm2' },
+    eletrica:     { basico: 150,  medio: 220,  alto: 350,  unidade: 'pt' },
+    hidraulica:   { basico: 200,  medio: 300,  alto: 480,  unidade: 'pt' },
+    piso:         { basico: 60,   medio: 100,  alto: 180,  unidade: 'm2' },
+    construcao:   { basico: 1200, medio: 1800, alto: 3200, unidade: 'm2' },
+    fachada:      { basico: 100,  medio: 180,  alto: 320,  unidade: 'm2' }
+  },
+  eu: {
+    pintura:      { basico: 8,    medio: 15,   alto: 25,   unidade: 'm2' },
+    banheiro:     { basico: 700,  medio: 1200, alto: 2200, unidade: 'm2' },
+    cozinha:      { basico: 600,  medio: 1100, alto: 2000, unidade: 'm2' },
+    reforma_geral:{ basico: 800,  medio: 1400, alto: 2500, unidade: 'm2' },
+    eletrica:     { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
+    hidraulica:   { basico: 160,  medio: 240,  alto: 380,  unidade: 'pt' },
+    piso:         { basico: 50,   medio: 90,   alto: 160,  unidade: 'm2' },
+    construcao:   { basico: 1100, medio: 1700, alto: 3000, unidade: 'm2' },
+    fachada:      { basico: 90,   medio: 160,  alto: 280,  unidade: 'm2' }
+  },
+  global: {
+    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm2' },
+    banheiro:     { basico: 600,  medio: 1000, alto: 1800, unidade: 'm2' },
+    cozinha:      { basico: 500,  medio: 900,  alto: 1600, unidade: 'm2' },
+    reforma_geral:{ basico: 700,  medio: 1100, alto: 2000, unidade: 'm2' },
+    eletrica:     { basico: 100,  medio: 150,  alto: 250,  unidade: 'pt' },
+    hidraulica:   { basico: 130,  medio: 200,  alto: 320,  unidade: 'pt' },
+    piso:         { basico: 40,   medio: 75,   alto: 140,  unidade: 'm2' },
+    construcao:   { basico: 900,  medio: 1400, alto: 2500, unidade: 'm2' },
+    fachada:      { basico: 70,   medio: 130,  alto: 220,  unidade: 'm2' }
+  }
 };
 
 const SERVICE_LABELS = {
@@ -50,24 +97,31 @@ const TIMELINES = {
   fachada:       ['Andaimes e segurança (2 dias)', 'Limpeza e preparação (3 dias)', 'Reparos estruturais (3 dias)', 'Aplicação de revestimento (5 dias)', 'Pintura e acabamento (4 dias)']
 };
 
-// ─── CÁLCULO DE VALOR ────────────────────────────────────────────────────────
-function calcValue(country, standard, area, material, demolition) {
-  const p = PRICES[country] || PRICES.global;
-  let base = p[standard] * area;
+// ─── CÁLCULO DE VALOR POR SERVIÇO ────────────────────────────────────────────
+function calcValue(country, standard, area, material, demolition, service) {
+  const region = SERVICE_PRICES[country] || SERVICE_PRICES.global;
+  const svc = region[service] || region['reforma_geral'];
+  const pricePerUnit = svc[standard] || svc.medio;
+  const unidade = svc.unidade;
+
+  let base = pricePerUnit * area;
   let matAdd = material === 'sim' ? base * 0.2 : 0;
   let demAdd = demolition === 'sim' ? (base + matAdd) * 0.1 : 0;
+
   return {
     base: Math.round(base),
     matAdd: Math.round(matAdd),
     demAdd: Math.round(demAdd),
-    total: Math.round(base + matAdd + demAdd)
+    total: Math.round(base + matAdd + demAdd),
+    pricePerUnit,
+    unidade
   };
 }
 
 function formatMoney(val, country) {
-  const p = PRICES[country] || PRICES.global;
+  const info = CURRENCY_INFO[country] || CURRENCY_INFO.global;
   if (country === 'br') return 'R$ ' + val.toLocaleString('pt-BR');
-  return p.symbol + ' ' + val.toLocaleString('en-US');
+  return info.symbol + ' ' + val.toLocaleString('en-US');
 }
 
 // ─── GERAR PDF ───────────────────────────────────────────────────────────────
@@ -131,7 +185,7 @@ async function generatePDF(data) {
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
     doc.fillColor(DARK).fontSize(10).font('Helvetica');
-    doc.text(`Custo base (${data.area} m² × ${formatMoney(PRICES[data.country]?.[data.standard] || 1200, data.country)}/m²):  ${formatMoney(data.costs.base, data.country)}`);
+    doc.text(`Custo base (${data.area} ${data.costs.unidade || 'm²'} × ${formatMoney(data.costs.pricePerUnit || 0, data.country)}/${data.costs.unidade || 'm²'}):  ${formatMoney(data.costs.base, data.country)}`);
     if (data.costs.matAdd > 0)
       doc.text(`Material incluso (+20%):  ${formatMoney(data.costs.matAdd, data.country)}`);
     if (data.costs.demAdd > 0)
@@ -243,19 +297,19 @@ app.post('/create-checkout', async (req, res) => {
   try {
     const { name, email, phone, country, service, area, standard, material, demolition, description } = req.body;
 
-    const p = PRICES[country] || PRICES.global;
+    const info = CURRENCY_INFO[country] || CURRENCY_INFO.global;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       customer_email: email,
       line_items: [{
         price_data: {
-          currency: p.currency,
+          currency: info.currency,
           product_data: {
             name: 'Orçamento Técnico Profissional',
             description: `${SERVICE_LABELS[service] || service} · ${area} m² · Padrão ${standard}`
           },
-          unit_amount: p.unlock
+          unit_amount: info.unlock
         },
         quantity: 1
       }],
@@ -288,7 +342,7 @@ app.post('/webhook', async (req, res) => {
     const session = event.data.object;
     const m = session.metadata;
 
-    const costs = calcValue(m.country, m.standard, parseFloat(m.area), m.material, m.demolition);
+    const costs = calcValue(m.country, m.standard, parseFloat(m.area), m.material, m.demolition, m.service);
 
     const data = {
       name: m.name,
