@@ -191,11 +191,13 @@ async function generatePDF(data) {
     if (data.costs.demAdd > 0)
       doc.text(`Demolição (+10%):  ${formatMoney(data.costs.demAdd, data.country)}`);
 
-    doc.moveDown(0.5);
-    doc.rect(50, doc.y, 495, 36).fill(LIGHT);
+    doc.moveDown(0.8);
+    const totalY = doc.y;
+    doc.rect(50, totalY, 495, 36).fill(LIGHT);
+    doc.moveDown(0.3);
     doc.fillColor(DARK).fontSize(13).font('Helvetica-Bold')
-       .text(`TOTAL ESTIMADO:  ${formatMoney(data.costs.total, data.country)}`, 60, doc.y - 28);
-    doc.moveDown(1.5);
+       .text(`TOTAL ESTIMADO:  ${formatMoney(data.costs.total, data.country)}`, 60, totalY + 10, { width: 475 });
+    doc.moveDown(1.8);
 
     // Cronograma
     const timeline = TIMELINES[data.service] || TIMELINES.reforma_geral;
