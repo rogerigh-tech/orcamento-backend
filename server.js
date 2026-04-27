@@ -28,48 +28,48 @@ const CURRENCY_INFO = {
 
 const SERVICE_PRICES = {
   br: {
-    pintura:      { basico: 18,   medio: 28,   alto: 45,   unidade: 'm2' },
-    banheiro:     { basico: 900,  medio: 1400, alto: 2200, unidade: 'm2' },
-    cozinha:      { basico: 800,  medio: 1300, alto: 2000, unidade: 'm2' },
-    reforma_geral:{ basico: 850,  medio: 1300, alto: 2000, unidade: 'm2' },
+    pintura:      { basico: 18,   medio: 28,   alto: 45,   unidade: 'm²' },
+    banheiro:     { basico: 900,  medio: 1400, alto: 2200, unidade: 'm²' },
+    cozinha:      { basico: 800,  medio: 1300, alto: 2000, unidade: 'm²' },
+    reforma_geral:{ basico: 850,  medio: 1300, alto: 2000, unidade: 'm²' },
     eletrica:     { basico: 90,   medio: 130,  alto: 200,  unidade: 'pt' },
     hidraulica:   { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
-    piso:         { basico: 80,   medio: 130,  alto: 220,  unidade: 'm2' },
-    construcao:   { basico: 1600, medio: 2300, alto: 3800, unidade: 'm2' },
-    fachada:      { basico: 120,  medio: 200,  alto: 350,  unidade: 'm2' }
+    piso:         { basico: 80,   medio: 130,  alto: 220,  unidade: 'm²' },
+    construcao:   { basico: 1600, medio: 2300, alto: 3800, unidade: 'm²' },
+    fachada:      { basico: 120,  medio: 200,  alto: 350,  unidade: 'm²' }
   },
   us: {
-    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm2' },
-    banheiro:     { basico: 800,  medio: 1400, alto: 2500, unidade: 'm2' },
-    cozinha:      { basico: 700,  medio: 1200, alto: 2200, unidade: 'm2' },
-    reforma_geral:{ basico: 900,  medio: 1500, alto: 2800, unidade: 'm2' },
+    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
+    banheiro:     { basico: 800,  medio: 1400, alto: 2500, unidade: 'm²' },
+    cozinha:      { basico: 700,  medio: 1200, alto: 2200, unidade: 'm²' },
+    reforma_geral:{ basico: 900,  medio: 1500, alto: 2800, unidade: 'm²' },
     eletrica:     { basico: 150,  medio: 220,  alto: 350,  unidade: 'pt' },
     hidraulica:   { basico: 200,  medio: 300,  alto: 480,  unidade: 'pt' },
-    piso:         { basico: 60,   medio: 100,  alto: 180,  unidade: 'm2' },
-    construcao:   { basico: 1200, medio: 1800, alto: 3200, unidade: 'm2' },
-    fachada:      { basico: 100,  medio: 180,  alto: 320,  unidade: 'm2' }
+    piso:         { basico: 60,   medio: 100,  alto: 180,  unidade: 'm²' },
+    construcao:   { basico: 1200, medio: 1800, alto: 3200, unidade: 'm²' },
+    fachada:      { basico: 100,  medio: 180,  alto: 320,  unidade: 'm²' }
   },
   eu: {
-    pintura:      { basico: 8,    medio: 15,   alto: 25,   unidade: 'm2' },
-    banheiro:     { basico: 700,  medio: 1200, alto: 2200, unidade: 'm2' },
-    cozinha:      { basico: 600,  medio: 1100, alto: 2000, unidade: 'm2' },
-    reforma_geral:{ basico: 800,  medio: 1400, alto: 2500, unidade: 'm2' },
+    pintura:      { basico: 8,    medio: 15,   alto: 25,   unidade: 'm²' },
+    banheiro:     { basico: 700,  medio: 1200, alto: 2200, unidade: 'm²' },
+    cozinha:      { basico: 600,  medio: 1100, alto: 2000, unidade: 'm²' },
+    reforma_geral:{ basico: 800,  medio: 1400, alto: 2500, unidade: 'm²' },
     eletrica:     { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
     hidraulica:   { basico: 160,  medio: 240,  alto: 380,  unidade: 'pt' },
-    piso:         { basico: 50,   medio: 90,   alto: 160,  unidade: 'm2' },
-    construcao:   { basico: 1100, medio: 1700, alto: 3000, unidade: 'm2' },
-    fachada:      { basico: 90,   medio: 160,  alto: 280,  unidade: 'm2' }
+    piso:         { basico: 50,   medio: 90,   alto: 160,  unidade: 'm²' },
+    construcao:   { basico: 1100, medio: 1700, alto: 3000, unidade: 'm²' },
+    fachada:      { basico: 90,   medio: 160,  alto: 280,  unidade: 'm²' }
   },
   global: {
-    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm2' },
-    banheiro:     { basico: 600,  medio: 1000, alto: 1800, unidade: 'm2' },
-    cozinha:      { basico: 500,  medio: 900,  alto: 1600, unidade: 'm2' },
-    reforma_geral:{ basico: 700,  medio: 1100, alto: 2000, unidade: 'm2' },
+    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
+    banheiro:     { basico: 600,  medio: 1000, alto: 1800, unidade: 'm²' },
+    cozinha:      { basico: 500,  medio: 900,  alto: 1600, unidade: 'm²' },
+    reforma_geral:{ basico: 700,  medio: 1100, alto: 2000, unidade: 'm²' },
     eletrica:     { basico: 100,  medio: 150,  alto: 250,  unidade: 'pt' },
     hidraulica:   { basico: 130,  medio: 200,  alto: 320,  unidade: 'pt' },
-    piso:         { basico: 40,   medio: 75,   alto: 140,  unidade: 'm2' },
-    construcao:   { basico: 900,  medio: 1400, alto: 2500, unidade: 'm2' },
-    fachada:      { basico: 70,   medio: 130,  alto: 220,  unidade: 'm2' }
+    piso:         { basico: 40,   medio: 75,   alto: 140,  unidade: 'm²' },
+    construcao:   { basico: 900,  medio: 1400, alto: 2500, unidade: 'm²' },
+    fachada:      { basico: 70,   medio: 130,  alto: 220,  unidade: 'm²' }
   }
 };
 
