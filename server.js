@@ -203,10 +203,11 @@ async function generatePDF(data) {
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
     timeline.forEach((step, i) => {
-      doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold').text(`${i + 1}.`, 50, doc.y, { continued: true, width: 20 });
-      doc.fillColor(DARK).font('Helvetica').text(` ${step}`);
+      doc.fillColor(DARK).fontSize(10).font('Helvetica')
+         .text(`${i + 1}. ${step}`, 50, doc.y, { width: 495, lineBreak: true });
+      doc.moveDown(0.2);
     });
-    doc.moveDown(0.8);
+    doc.moveDown(0.6);
 
     // Recomendações
     doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('RECOMENDAÇÕES TÉCNICAS');
