@@ -302,8 +302,11 @@ app.post('/create-checkout', async (req, res) => {
 
     const info = CURRENCY_INFO[country] || CURRENCY_INFO.global;
 
+    // Pix disponivel apenas para BRL
+    const paymentMethods = info.currency === 'brl' ? ['card', 'pix'] : ['card'];
+
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: paymentMethods,
       customer_email: email,
       line_items: [{
         price_data: {
@@ -317,6 +320,9 @@ app.post('/create-checkout', async (req, res) => {
         quantity: 1
       }],
       mode: 'payment',
+      payment_method_options: info.currency === 'brl' ? {
+        pix: { expires_after_seconds: 3600 }
+      } : {},
       success_url: `${process.env.FRONTEND_URL}/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}`,
       metadata: { name, email, phone, country, service, area, standard, material, demolition, description: description || '' }
