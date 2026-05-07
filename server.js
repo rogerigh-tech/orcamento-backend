@@ -36,7 +36,8 @@ const SERVICE_PRICES = {
     hidraulica:   { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
     piso:         { basico: 80,   medio: 130,  alto: 220,  unidade: 'm²' },
     construcao:   { basico: 1600, medio: 2300, alto: 3800, unidade: 'm²' },
-    fachada:      { basico: 120,  medio: 200,  alto: 350,  unidade: 'm²' }
+    fachada:      { basico: 120,  medio: 200,  alto: 350,  unidade: 'm²' },
+    ar_condicionado: { basico: 800,  medio: 1400, alto: 2500, unidade: 'un' }
   },
   us: {
     pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
@@ -47,7 +48,8 @@ const SERVICE_PRICES = {
     hidraulica:   { basico: 200,  medio: 300,  alto: 480,  unidade: 'pt' },
     piso:         { basico: 60,   medio: 100,  alto: 180,  unidade: 'm²' },
     construcao:   { basico: 1200, medio: 1800, alto: 3200, unidade: 'm²' },
-    fachada:      { basico: 100,  medio: 180,  alto: 320,  unidade: 'm²' }
+    fachada:      { basico: 100,  medio: 180,  alto: 320,  unidade: 'm²' },
+    ar_condicionado: { basico: 500,  medio: 900,  alto: 1800, unidade: 'un' }
   },
   eu: {
     pintura:      { basico: 8,    medio: 15,   alto: 25,   unidade: 'm²' },
@@ -58,7 +60,8 @@ const SERVICE_PRICES = {
     hidraulica:   { basico: 160,  medio: 240,  alto: 380,  unidade: 'pt' },
     piso:         { basico: 50,   medio: 90,   alto: 160,  unidade: 'm²' },
     construcao:   { basico: 1100, medio: 1700, alto: 3000, unidade: 'm²' },
-    fachada:      { basico: 90,   medio: 160,  alto: 280,  unidade: 'm²' }
+    fachada:      { basico: 90,   medio: 160,  alto: 280,  unidade: 'm²' },
+    ar_condicionado: { basico: 600,  medio: 1100, alto: 2000, unidade: 'un' }
   },
   global: {
     pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
@@ -69,7 +72,8 @@ const SERVICE_PRICES = {
     hidraulica:   { basico: 130,  medio: 200,  alto: 320,  unidade: 'pt' },
     piso:         { basico: 40,   medio: 75,   alto: 140,  unidade: 'm²' },
     construcao:   { basico: 900,  medio: 1400, alto: 2500, unidade: 'm²' },
-    fachada:      { basico: 70,   medio: 130,  alto: 220,  unidade: 'm²' }
+    fachada:      { basico: 70,   medio: 130,  alto: 220,  unidade: 'm²' },
+    ar_condicionado: { basico: 400,  medio: 800,  alto: 1500, unidade: 'un' }
   }
 };
 
@@ -82,7 +86,8 @@ const SERVICE_LABELS = {
   hidraulica: 'Instalação Hidráulica',
   piso: 'Piso / Revestimento',
   construcao: 'Construção Nova',
-  fachada: 'Fachada / Área Externa'
+  fachada: 'Fachada / Área Externa',
+  ar_condicionado: 'Ar Condicionado'
 };
 
 const TIMELINES = {
@@ -94,7 +99,8 @@ const TIMELINES = {
   hidraulica:    ['Projeto hidráulico (1 dia)', 'Abertura de rasgos (2 dias)', 'Tubulação e conexões (3 dias)', 'Testes de pressão (1 dia)', 'Acabamentos e louças (2 dias)'],
   piso:          ['Retirada do piso existente (2 dias)', 'Regularização de contrapiso (2 dias)', 'Assentamento (4 dias)', 'Rejuntamento e limpeza (2 dias)'],
   construcao:    ['Fundação (15 dias)', 'Estrutura (20 dias)', 'Alvenaria (12 dias)', 'Cobertura (8 dias)', 'Instalações (10 dias)', 'Acabamentos (15 dias)', 'Vistoria final (3 dias)'],
-  fachada:       ['Andaimes e segurança (2 dias)', 'Limpeza e preparação (3 dias)', 'Reparos estruturais (3 dias)', 'Aplicação de revestimento (5 dias)', 'Pintura e acabamento (4 dias)']
+  fachada:       ['Andaimes e segurança (2 dias)', 'Limpeza e preparação (3 dias)', 'Reparos estruturais (3 dias)', 'Aplicação de revestimento (5 dias)', 'Pintura e acabamento (4 dias)'],
+  ar_condicionado: ['Vistoria técnica e projeto (1 dia)', 'Instalação das unidades (1 dia)', 'Passagem de tubulação e elétrica (1 dia)', 'Teste e comissionamento (1 dia)']
 };
 
 // ─── CÁLCULO DE VALOR POR SERVIÇO ────────────────────────────────────────────
@@ -294,6 +300,51 @@ async function sendWhatsApp(phone, name, pdfPath) {
     { phone: cleanPhone, document: pdfBase64, fileName: 'orcamento-tecnico.pdf', caption: 'Seu orçamento técnico completo 📄' }
   );
 }
+
+// ─── ROTA: ACESSO GRATUITO ───────────────────────────────────────────────────
+const FREE_ACCESS_EMAILS = [
+  'roger.igh@gmail.com',
+  'roger.igh@hotmail.com',
+  'rogerio@orcamentodeobrarapido.com.br'
+];
+
+app.post('/free-access', async (req, res) => {
+  try {
+    const { name, email, phone, country, service, area, standard, material, demolition, description } = req.body;
+
+    if (!FREE_ACCESS_EMAILS.includes((email || '').toLowerCase().trim())) {
+      return res.status(403).json({ error: 'Email não autorizado para acesso gratuito.' });
+    }
+
+    const costs = calcValue(country, standard, parseFloat(area), material, demolition, service);
+
+    const data = {
+      name, email, phone,
+      country,
+      countryLabel: { br: 'Brasil', us: 'Estados Unidos', eu: 'Europa', global: 'Internacional' }[country] || country,
+      service,
+      serviceLabel: SERVICE_LABELS[service] || service,
+      area: parseFloat(area),
+      standard,
+      standardLabel: { basico: 'Básico', medio: 'Médio', alto: 'Alto Padrão' }[standard] || standard,
+      material,
+      demolition,
+      description: description || '',
+      costs
+    };
+
+    const pdfPath = await generatePDF(data);
+    await sendEmail(email, name, pdfPath);
+    if (phone) await sendWhatsApp(phone, name, pdfPath);
+    fs.unlinkSync(pdfPath);
+
+    console.log(`✅ Acesso gratuito entregue para ${email}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro no acesso gratuito:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ─── ROTA: CRIAR SESSÃO STRIPE ────────────────────────────────────────────────
 app.post('/create-checkout', async (req, res) => {
