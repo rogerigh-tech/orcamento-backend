@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const nodemailer = require('nodemailer');
 const axios = require('axios');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
@@ -16,14 +15,13 @@ app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'], allowedHeaders: [
 app.use('/webhook', express.raw({ type: 'application/json' }));
 app.use(bodyParser.json());
 
-// ─── KEEP-ALIVE: impede o Render de hibernar ──────────────────────────────────
-// Faz um ping em si mesmo a cada 10 minutos
+// ─── KEEP-ALIVE ───────────────────────────────────────────────────────────────
 const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 10000}`;
 setInterval(() => {
   axios.get(`${SELF_URL}/health`)
     .then(() => console.log('💓 Keep-alive ping OK'))
     .catch(err => console.log('⚠️ Keep-alive ping falhou:', err.message));
-}, 10 * 60 * 1000); // 10 minutos
+}, 10 * 60 * 1000);
 
 // ─── TABELA DE PREÇOS ─────────────────────────────────────────────────────────
 const CURRENCY_INFO = {
@@ -35,52 +33,52 @@ const CURRENCY_INFO = {
 
 const SERVICE_PRICES = {
   br: {
-    pintura:      { basico: 18,   medio: 28,   alto: 45,   unidade: 'm²' },
-    banheiro:     { basico: 900,  medio: 1400, alto: 2200, unidade: 'm²' },
-    cozinha:      { basico: 800,  medio: 1300, alto: 2000, unidade: 'm²' },
-    reforma_geral:{ basico: 850,  medio: 1300, alto: 2000, unidade: 'm²' },
-    eletrica:     { basico: 90,   medio: 130,  alto: 200,  unidade: 'pt' },
-    hidraulica:   { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
-    piso:         { basico: 80,   medio: 130,  alto: 220,  unidade: 'm²' },
-    construcao:   { basico: 1600, medio: 2300, alto: 3800, unidade: 'm²' },
-    fachada:      { basico: 120,  medio: 200,  alto: 350,  unidade: 'm²' },
-    ar_condicionado: { basico: 800, medio: 1400, alto: 2500, unidade: 'un' }
+    pintura:         { basico: 18,   medio: 28,   alto: 45,   unidade: 'm²' },
+    banheiro:        { basico: 900,  medio: 1400, alto: 2200, unidade: 'm²' },
+    cozinha:         { basico: 800,  medio: 1300, alto: 2000, unidade: 'm²' },
+    reforma_geral:   { basico: 850,  medio: 1300, alto: 2000, unidade: 'm²' },
+    eletrica:        { basico: 90,   medio: 130,  alto: 200,  unidade: 'pt' },
+    hidraulica:      { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
+    piso:            { basico: 80,   medio: 130,  alto: 220,  unidade: 'm²' },
+    construcao:      { basico: 1600, medio: 2300, alto: 3800, unidade: 'm²' },
+    fachada:         { basico: 120,  medio: 200,  alto: 350,  unidade: 'm²' },
+    ar_condicionado: { basico: 800,  medio: 1400, alto: 2500, unidade: 'un' }
   },
   us: {
-    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
-    banheiro:     { basico: 800,  medio: 1400, alto: 2500, unidade: 'm²' },
-    cozinha:      { basico: 700,  medio: 1200, alto: 2200, unidade: 'm²' },
-    reforma_geral:{ basico: 900,  medio: 1500, alto: 2800, unidade: 'm²' },
-    eletrica:     { basico: 150,  medio: 220,  alto: 350,  unidade: 'pt' },
-    hidraulica:   { basico: 200,  medio: 300,  alto: 480,  unidade: 'pt' },
-    piso:         { basico: 60,   medio: 100,  alto: 180,  unidade: 'm²' },
-    construcao:   { basico: 1200, medio: 1800, alto: 3200, unidade: 'm²' },
-    fachada:      { basico: 100,  medio: 180,  alto: 320,  unidade: 'm²' },
-    ar_condicionado: { basico: 500, medio: 900, alto: 1800, unidade: 'un' }
+    pintura:         { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
+    banheiro:        { basico: 800,  medio: 1400, alto: 2500, unidade: 'm²' },
+    cozinha:         { basico: 700,  medio: 1200, alto: 2200, unidade: 'm²' },
+    reforma_geral:   { basico: 900,  medio: 1500, alto: 2800, unidade: 'm²' },
+    eletrica:        { basico: 150,  medio: 220,  alto: 350,  unidade: 'pt' },
+    hidraulica:      { basico: 200,  medio: 300,  alto: 480,  unidade: 'pt' },
+    piso:            { basico: 60,   medio: 100,  alto: 180,  unidade: 'm²' },
+    construcao:      { basico: 1200, medio: 1800, alto: 3200, unidade: 'm²' },
+    fachada:         { basico: 100,  medio: 180,  alto: 320,  unidade: 'm²' },
+    ar_condicionado: { basico: 500,  medio: 900,  alto: 1800, unidade: 'un' }
   },
   eu: {
-    pintura:      { basico: 8,    medio: 15,   alto: 25,   unidade: 'm²' },
-    banheiro:     { basico: 700,  medio: 1200, alto: 2200, unidade: 'm²' },
-    cozinha:      { basico: 600,  medio: 1100, alto: 2000, unidade: 'm²' },
-    reforma_geral:{ basico: 800,  medio: 1400, alto: 2500, unidade: 'm²' },
-    eletrica:     { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
-    hidraulica:   { basico: 160,  medio: 240,  alto: 380,  unidade: 'pt' },
-    piso:         { basico: 50,   medio: 90,   alto: 160,  unidade: 'm²' },
-    construcao:   { basico: 1100, medio: 1700, alto: 3000, unidade: 'm²' },
-    fachada:      { basico: 90,   medio: 160,  alto: 280,  unidade: 'm²' },
-    ar_condicionado: { basico: 600, medio: 1100, alto: 2000, unidade: 'un' }
+    pintura:         { basico: 8,    medio: 15,   alto: 25,   unidade: 'm²' },
+    banheiro:        { basico: 700,  medio: 1200, alto: 2200, unidade: 'm²' },
+    cozinha:         { basico: 600,  medio: 1100, alto: 2000, unidade: 'm²' },
+    reforma_geral:   { basico: 800,  medio: 1400, alto: 2500, unidade: 'm²' },
+    eletrica:        { basico: 120,  medio: 180,  alto: 280,  unidade: 'pt' },
+    hidraulica:      { basico: 160,  medio: 240,  alto: 380,  unidade: 'pt' },
+    piso:            { basico: 50,   medio: 90,   alto: 160,  unidade: 'm²' },
+    construcao:      { basico: 1100, medio: 1700, alto: 3000, unidade: 'm²' },
+    fachada:         { basico: 90,   medio: 160,  alto: 280,  unidade: 'm²' },
+    ar_condicionado: { basico: 600,  medio: 1100, alto: 2000, unidade: 'un' }
   },
   global: {
-    pintura:      { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
-    banheiro:     { basico: 600,  medio: 1000, alto: 1800, unidade: 'm²' },
-    cozinha:      { basico: 500,  medio: 900,  alto: 1600, unidade: 'm²' },
-    reforma_geral:{ basico: 700,  medio: 1100, alto: 2000, unidade: 'm²' },
-    eletrica:     { basico: 100,  medio: 150,  alto: 250,  unidade: 'pt' },
-    hidraulica:   { basico: 130,  medio: 200,  alto: 320,  unidade: 'pt' },
-    piso:         { basico: 40,   medio: 75,   alto: 140,  unidade: 'm²' },
-    construcao:   { basico: 900,  medio: 1400, alto: 2500, unidade: 'm²' },
-    fachada:      { basico: 70,   medio: 130,  alto: 220,  unidade: 'm²' },
-    ar_condicionado: { basico: 400, medio: 800, alto: 1500, unidade: 'un' }
+    pintura:         { basico: 2,    medio: 4,    alto: 7,    unidade: 'm²' },
+    banheiro:        { basico: 600,  medio: 1000, alto: 1800, unidade: 'm²' },
+    cozinha:         { basico: 500,  medio: 900,  alto: 1600, unidade: 'm²' },
+    reforma_geral:   { basico: 700,  medio: 1100, alto: 2000, unidade: 'm²' },
+    eletrica:        { basico: 100,  medio: 150,  alto: 250,  unidade: 'pt' },
+    hidraulica:      { basico: 130,  medio: 200,  alto: 320,  unidade: 'pt' },
+    piso:            { basico: 40,   medio: 75,   alto: 140,  unidade: 'm²' },
+    construcao:      { basico: 900,  medio: 1400, alto: 2500, unidade: 'm²' },
+    fachada:         { basico: 70,   medio: 130,  alto: 220,  unidade: 'm²' },
+    ar_condicionado: { basico: 400,  medio: 800,  alto: 1500, unidade: 'un' }
   }
 };
 
@@ -92,15 +90,15 @@ const SERVICE_LABELS = {
 };
 
 const TIMELINES = {
-  reforma_geral: ['Levantamento e projeto (3 dias)', 'Demolição e preparação (5 dias)', 'Estrutura e alvenaria (7 dias)', 'Instalações elétricas e hidráulicas (5 dias)', 'Revestimentos e acabamentos (8 dias)', 'Pintura e limpeza final (4 dias)'],
-  banheiro:      ['Demolição e remoção (2 dias)', 'Impermeabilização (2 dias)', 'Instalações hidráulicas (3 dias)', 'Revestimento e louças (4 dias)', 'Acabamento final (2 dias)'],
-  cozinha:       ['Projeto e marcenaria (3 dias)', 'Instalação elétrica/hidráulica (3 dias)', 'Revestimentos (3 dias)', 'Móveis e equipamentos (4 dias)', 'Acabamento (2 dias)'],
-  pintura:       ['Preparação de superfícies (2 dias)', 'Primeira demão (2 dias)', 'Correções e massa corrida (1 dia)', 'Segunda demão e acabamento (2 dias)'],
-  eletrica:      ['Projeto elétrico (2 dias)', 'Abertura de rasgos (2 dias)', 'Passagem de conduítes (3 dias)', 'Cabeamento e conexões (3 dias)', 'Quadro elétrico e testes (2 dias)'],
-  hidraulica:    ['Projeto hidráulico (1 dia)', 'Abertura de rasgos (2 dias)', 'Tubulação e conexões (3 dias)', 'Testes de pressão (1 dia)', 'Acabamentos e louças (2 dias)'],
-  piso:          ['Retirada do piso existente (2 dias)', 'Regularização de contrapiso (2 dias)', 'Assentamento (4 dias)', 'Rejuntamento e limpeza (2 dias)'],
-  construcao:    ['Fundação (15 dias)', 'Estrutura (20 dias)', 'Alvenaria (12 dias)', 'Cobertura (8 dias)', 'Instalações (10 dias)', 'Acabamentos (15 dias)', 'Vistoria final (3 dias)'],
-  fachada:       ['Andaimes e segurança (2 dias)', 'Limpeza e preparação (3 dias)', 'Reparos estruturais (3 dias)', 'Aplicação de revestimento (5 dias)', 'Pintura e acabamento (4 dias)'],
+  reforma_geral:   ['Levantamento e projeto (3 dias)', 'Demolição e preparação (5 dias)', 'Estrutura e alvenaria (7 dias)', 'Instalações elétricas e hidráulicas (5 dias)', 'Revestimentos e acabamentos (8 dias)', 'Pintura e limpeza final (4 dias)'],
+  banheiro:        ['Demolição e remoção (2 dias)', 'Impermeabilização (2 dias)', 'Instalações hidráulicas (3 dias)', 'Revestimento e louças (4 dias)', 'Acabamento final (2 dias)'],
+  cozinha:         ['Projeto e marcenaria (3 dias)', 'Instalação elétrica/hidráulica (3 dias)', 'Revestimentos (3 dias)', 'Móveis e equipamentos (4 dias)', 'Acabamento (2 dias)'],
+  pintura:         ['Preparação de superfícies (2 dias)', 'Primeira demão (2 dias)', 'Correções e massa corrida (1 dia)', 'Segunda demão e acabamento (2 dias)'],
+  eletrica:        ['Projeto elétrico (2 dias)', 'Abertura de rasgos (2 dias)', 'Passagem de conduítes (3 dias)', 'Cabeamento e conexões (3 dias)', 'Quadro elétrico e testes (2 dias)'],
+  hidraulica:      ['Projeto hidráulico (1 dia)', 'Abertura de rasgos (2 dias)', 'Tubulação e conexões (3 dias)', 'Testes de pressão (1 dia)', 'Acabamentos e louças (2 dias)'],
+  piso:            ['Retirada do piso existente (2 dias)', 'Regularização de contrapiso (2 dias)', 'Assentamento (4 dias)', 'Rejuntamento e limpeza (2 dias)'],
+  construcao:      ['Fundação (15 dias)', 'Estrutura (20 dias)', 'Alvenaria (12 dias)', 'Cobertura (8 dias)', 'Instalações (10 dias)', 'Acabamentos (15 dias)', 'Vistoria final (3 dias)'],
+  fachada:         ['Andaimes e segurança (2 dias)', 'Limpeza e preparação (3 dias)', 'Reparos estruturais (3 dias)', 'Aplicação de revestimento (5 dias)', 'Pintura e acabamento (4 dias)'],
   ar_condicionado: ['Vistoria técnica e projeto (1 dia)', 'Instalação das unidades (1 dia)', 'Passagem de tubulação e elétrica (1 dia)', 'Teste e comissionamento (1 dia)']
 };
 
@@ -175,7 +173,6 @@ async function generatePDF(data) {
     doc.moveDown(0.8);
     const totalY = doc.y;
     doc.rect(50, totalY, 495, 36).fill(LIGHT);
-    doc.moveDown(0.3);
     doc.fillColor(DARK).fontSize(13).font('Helvetica-Bold')
        .text(`TOTAL ESTIMADO:  ${formatMoney(data.costs.total, data.country)}`, 60, totalY + 10, { width: 475 });
     doc.moveDown(1.8);
@@ -211,15 +208,13 @@ async function generatePDF(data) {
   });
 }
 
-// ─── ENVIAR EMAIL ─────────────────────────────────────────────────────────────
+// ─── ENVIAR EMAIL VIA RESEND (API HTTP — funciona no Render gratuito) ──────────
 async function sendEmail(toEmail, name, pdfPath) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-  });
-  await transporter.sendMail({
-    from: `"Orçamento de Obra Rápido" <${process.env.EMAIL_USER}>`,
-    to: toEmail,
+  const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
+
+  const response = await axios.post('https://api.resend.com/emails', {
+    from: 'Orçamento de Obra Rápido <onboarding@resend.dev>',
+    to: [toEmail],
     subject: '🏗️ Seu orçamento técnico está pronto!',
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:auto">
@@ -229,6 +224,7 @@ async function sendEmail(toEmail, name, pdfPath) {
         <div style="background:#f9f9f9;padding:24px;border-radius:0 0 12px 12px;border:1px solid #eee">
           <p>Olá, <strong>${name}</strong>!</p>
           <p>Seu orçamento técnico profissional está pronto e segue em anexo.</p>
+          <p>O documento contém:</p>
           <ul>
             <li>✅ Estimativa de custo com base técnica</li>
             <li>📅 Cronograma completo por etapas</li>
@@ -239,8 +235,18 @@ async function sendEmail(toEmail, name, pdfPath) {
           <p><strong>Equipe Orçamento de Obra Rápido</strong></p>
         </div>
       </div>`,
-    attachments: [{ filename: 'orcamento-tecnico.pdf', path: pdfPath }]
+    attachments: [{
+      filename: 'orcamento-tecnico.pdf',
+      content: pdfBase64
+    }]
+  }, {
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
   });
+
+  console.log('📧 Email enviado via Resend:', response.data.id);
 }
 
 // ─── ENVIAR WHATSAPP ──────────────────────────────────────────────────────────
@@ -288,7 +294,7 @@ app.post('/free-access', async (req, res) => {
     console.log(`✅ Acesso gratuito entregue para ${email}`);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Erro no acesso gratuito:', err);
+    console.error('Erro no acesso gratuito:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -351,7 +357,7 @@ app.post('/webhook', async (req, res) => {
       fs.unlinkSync(pdfPath);
       console.log(`✅ Orçamento entregue para ${data.email}`);
     } catch (err) {
-      console.error('Erro na entrega:', err);
+      console.error('Erro na entrega:', err.message);
     }
   }
   res.json({ received: true });
