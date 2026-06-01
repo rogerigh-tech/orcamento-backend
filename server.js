@@ -110,7 +110,7 @@ function formatMoney(val, country) {
   return info.symbol + ' ' + val.toLocaleString('en-US');
 }
 
-// ─── ANÁLISE IA COM GEMINI ────────────────────────────────────────────────────
+// ─── ANÁLISE IA COM GEMINI (PROMPT ATUALIZADO) ────────────────────────────────
 async function analisarComIA(data) {
   const { service, area, standard, material, demolition, description, photos, pdf } = data;
   const temMidia = (photos && photos.length > 0) || pdf;
@@ -131,121 +131,105 @@ REGRAS IMPORTANTES:
 9. O orçamento deve parecer elaborado manualmente por um especialista.
 10. Sempre aumentar o nível de detalhamento conforme a complexidade da obra.
 
-DADOS DA OBRA:
+DADOS DA OBRA PARA GERAR O ORÇAMENTO:
 - Cliente: ${data.name || 'Não informado'}
 - Tipo de serviço: ${SERVICE_LABELS[service] || service}
-- Área: ${area} m²
-- Padrão: ${standard}
+- Área aproximada: ${area} m²
+- Padrão da obra: ${standard}
 - Material incluso: ${material === 'sim' ? 'Sim' : 'Não'}
-- Demolição: ${demolition === 'sim' ? 'Sim' : 'Não'}
-- Descrição do cliente: ${description || 'Não informada'}
+- Demolição inclusa: ${demolition === 'sim' ? 'Sim' : 'Não'}
+- Objetivo da reforma / Descrição do cliente: ${description || 'Não informada'}
 ${temMidia ? '- Arquivos enviados: analisados acima (fotos/PDF do local da obra)' : ''}
 
 Responda APENAS com um JSON válido, sem texto adicional, sem markdown, com EXATAMENTE esta estrutura:
 {
-  "diagnostico": "Análise técnica descritiva e detalhada em 3-5 frases explicando: condições gerais da obra, necessidades estruturais, adaptações necessárias, possíveis desafios técnicos e cuidados específicos para execução. Citar problemas específicos vistos nas fotos/PDF se disponíveis.",
+  "analise_tecnica_inicial": "Faça uma análise técnica descritiva e robusta (3-5 frases) explicando: condições gerais da obra, necessidades estruturais, adaptações necessárias, possíveis desafios técnicos e cuidados específicos para execução com base nas características do ambiente.",
   "alertas": [
     "Alerta técnico detalhado 1 — descrever o problema e consequência",
-    "Alerta técnico detalhado 2 — descrever o problema e consequência",
-    "Alerta técnico detalhado 3 — descrever o problema e consequência"
+    "Alerta técnico detalhado 2 — descrever o problema e consequência"
   ],
-  "etapas": [
+  "escopo_detalhado": {
+    "demolicoes_preparacao": "Descrever detalhadamente remoções, descarte de entulho legalizado, proteção de áreas e preparação do ambiente.",
+    "alvenaria_adequacoes": "Descrever detalhadamente construção ou remoção de paredes, regularizações, reforços estruturais e fechamentos.",
+    "instalacoes_eletricas": "Descrever detalhadamente novos pontos, iluminação, tomadas, quadro elétrico, infraestrutura técnica e normas técnicas aplicáveis (ex: NBR 5410).",
+    "instalacoes_hidraulicas": "Descrever detalhadamente pontos de água, esgoto, tubulações e adequações sanitárias necessárias.",
+    "revestimentos_acabamentos": "Descrever detalhadamente a execução de pisos, paredes, forros, pintura técnica e acabamento final.",
+    "limpeza_tecnica_entrega": "Descrever detalhadamente o processo de limpeza pós-obra, testes finais de funcionamento, conferência técnica e entrega oficial do ambiente."
+  },
+  "cronograma_previsional": [
     {
-      "numero": 1,
-      "titulo": "Nome técnico da etapa",
-      "descricao": "Descrição técnica completa e detalhada: o que será executado, como será feito, quais materiais serão utilizados (marcas/especificações técnicas quando aplicável), qual a finalidade estrutural ou estética de cada procedimento, quais normas técnicas se aplicam (ABNT quando relevante). Mínimo 3 frases por etapa.",
-      "prazo": "X dias"
+      "etapa": "Nome da etapa do escopo",
+      "prazo_estimado": "X dias",
+      "sequencia_executiva": "Explicação detalhada sobre a sequência de execução e dependência técnica entre os serviços desta fase."
     }
   ],
-  "recomendacoes": [
-    "Recomendação técnica profissional 1 com justificativa",
-    "Recomendação técnica profissional 2 com justificativa",
-    "Recomendação técnica profissional 3 com justificativa",
-    "Recomendação técnica profissional 4 com justificativa"
-  ]
+  "recomendacoes_tecnicas": [
+    "Recomendação profissional sobre acompanhamento técnico / Emissão de ART ou RRT.",
+    "Recomendação sobre normas de segurança do trabalho e EPIs.",
+    "Recomendação sobre compatibilização de projetos e controle de qualidade dos materiais."
+  ],
+  "consideracoes_finais": "Texto profissional robusto reforçando a importância da vistoria técnica presencial, a possibilidade de ajustes finos após a visita técnica, variações de custos conforme escolhas de acabamento e a necessidade de um levantamento executivo completo."
 }
 
-REGRAS ADICIONAIS:
-- Se houver infiltração, mofo, trincas, descascamento nas fotos — cite e detalhe o tratamento (raspagem, selador antimofo, impermeabilizante, argamassa de rejuntamento etc.)
-- Mínimo 5 etapas, máximo 8, cobrindo todas as fases da obra (demolição se aplicável → preparação → execução → acabamento → entrega)
-- Cada etapa com descrição técnica real, detalhada e profissional — nunca genérica
-- Os valores do cronograma devem ser realistas para o mercado brasileiro
-- Responda APENAS o JSON válido`;
+REGRAS ADICIONAIS DE CONTEÚDO:
+- Se houver infiltração, mofo, trincas, descascamento nas fotos — cite e detalhe o tratamento específico.
+- Forneça descrições técnicas reais e profissionais em cada uma das chaves do escopo — nunca use termos genéricos.
+- Responda APENAS o JSON válido para evitar quebras de sistema.`;
 
-  // Monta parts do Gemini
   const parts = [];
 
-  // Adiciona fotos
   if (photos && photos.length > 0) {
     photos.forEach(photo => {
-      parts.push({
-        inline_data: {
-          mime_type: photo.mediaType,
-          data: photo.base64
-        }
-      });
+      parts.push({ inline_data: { mime_type: photo.mediaType, data: photo.base64 } });
     });
   }
 
-  // Adiciona PDF
   if (pdf) {
-    parts.push({
-      inline_data: {
-        mime_type: 'application/pdf',
-        data: pdf.base64
-      }
-    });
+    parts.push({ inline_data: { mime_type: 'application/pdf', data: pdf.base64 } });
   }
 
-  // Adiciona o prompt de texto
   parts.push({ text: prompt });
 
   try {
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [{ parts }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2000
-        }
-      },
+      { contents: [{ parts }], generationConfig: { temperature: 0.3, maxOutputTokens: 2500 } },
       { timeout: 60000 }
     );
 
     const text = response.data.candidates[0].content.parts[0].text.trim();
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const result = JSON.parse(clean);
-    console.log('✅ Análise IA concluída com Gemini');
+    console.log('✅ Análise IA concluída com Gemini no novo formato');
     return result;
 
   } catch (err) {
-    console.error('Erro na análise Gemini:', err.response?.data || err.message);
-    // Fallback escopo genérico
+    console.error('Erro na análise Gemini, aplicando Fallback estruturado:', err.message);
     return {
-      diagnostico: `Projeto de ${SERVICE_LABELS[service] || service} em área de ${area} m², padrão ${standard}. Análise baseada nas informações fornecidas pelo cliente.`,
-      alertas: [
-        'Verifique a necessidade de impermeabilização antes de iniciar',
-        'Confirme o estado das instalações existentes',
-        'Avalie a necessidade de tratamento de umidade ou mofo'
+      analise_tecnica_inicial: `Projeto de ${SERVICE_LABELS[service] || service} em área de ${area} m², padrão ${standard}. Condições gerais avaliadas com base nas informações preliminares fornecidas pelo cliente.`,
+      alertas: ['Verifique a necessidade de impermeabilização regulamentar antes de iniciar.'],
+      escopo_detalhado: {
+        demolicoes_preparacao: "Remoção de entulhos superficiais, isolamento e proteção das áreas limítrofes da intervenção.",
+        alvenaria_adequacoes: "Regularização de superfícies e reparos estruturais preliminares conforme a demanda padrão.",
+        instalacoes_eletricas: "Revisão e adequação técnica de pontos de energia respeitando as normas vigentes de segurança.",
+        instalacoes_hidraulicas: "Mapeamento e teste de estanqueidade em ramais internos de água e esgoto.",
+        revestimentos_acabamentos: "Preparação de substrato seguido da aplicação de revestimentos e pintura técnica de acabamento.",
+        limpeza_tecnica_entrega: "Limpeza fina pós-obra, remoção de resíduos técnicos e vistoria de entrega."
+      },
+      cronograma_previsional: [
+        { etapa: 'Preparação e Infraestrutura', prazo_estimado: '3 dias', sequencia_executiva: 'Início imediato após liberação técnica da área.' },
+        { etapa: 'Acabamentos e Testes', prazo_estimado: '5 dias', sequencia_executiva: 'Depende diretamente da finalização e cura das etapas de infraestrutura.' }
       ],
-      etapas: [
-        { numero: 1, titulo: 'Vistoria e preparação', descricao: 'Vistoria técnica detalhada do local, remoção de materiais soltos, limpeza geral e proteção de áreas adjacentes', prazo: '1 dia' },
-        { numero: 2, titulo: 'Tratamentos especiais', descricao: `Tratamento de patologias identificadas: raspagem de tinta solta, aplicação de selador e correção de irregularidades superficiais`, prazo: '2 dias' },
-        { numero: 3, titulo: 'Execução principal', descricao: `Execução do serviço de ${SERVICE_LABELS[service] || service} conforme especificações técnicas e padrão ${standard}`, prazo: '4 dias' },
-        { numero: 4, titulo: 'Acabamento e entrega', descricao: 'Aplicação de acabamentos finais, verificação de qualidade, limpeza geral e entrega da obra ao cliente', prazo: '1 dia' }
+      recomendacoes_tecnicas: [
+        'É altamente recomendada a emissão de ART/RRT antes do início da execução.',
+        'Assegurar o cumprimento das normas de segurança e uso de EPIs.'
       ],
-      recomendacoes: [
-        'Solicite nota fiscal de todos os materiais adquiridos',
-        'Verifique registro do profissional no CREA ou CAU',
-        'Documente cada etapa com fotos para controle de qualidade',
-        'Obtenha ao menos 3 orçamentos de mão de obra antes de contratar'
-      ]
+      consideracoes_finais: "Este documento constitui uma estimativa de viabilidade técnica. Mudanças finas de acabamento ou surpresas estruturais pós-demolição podem gerar variações de escopo. Essencial vistoria presencial."
     };
   }
 }
 
-// ─── GERAR PDF COM ESCOPO PERSONALIZADO ──────────────────────────────────────
+// ─── GERAR PDF (MOLDE ADAPTADO PARA A NOVA ESTRUTURA) ─────────────────────────
 async function generatePDF(data, escopo) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -255,110 +239,144 @@ async function generatePDF(data, escopo) {
 
     const GREEN = '#1D9E75', DARK = '#085041', GRAY = '#5F5E5A', LIGHT = '#E1F5EE';
 
-    // Cabeçalho
+    // Cabeçalho Principal
     doc.rect(0, 0, doc.page.width, 80).fill(GREEN);
-    doc.fillColor('white').fontSize(22).font('Helvetica-Bold')
-       .text('Orçamento de Obra Rápido', 50, 20);
-    doc.fontSize(10).font('Helvetica')
-       .text('Análise técnica profissional · orcamentodeobrarapido.com', 50, 50);
+    doc.fillColor('white').fontSize(22).font('Helvetica-Bold').text('ORÇAMENTO TÉCNICO DE OBRA', 50, 20);
+    doc.fontSize(10).font('Helvetica').text('Análise Técnica Personalizada · Engenharia Especializada', 50, 50);
     doc.moveDown(3);
-    doc.fillColor(GRAY).fontSize(9)
-       .text('Gerado em: ' + new Date().toLocaleDateString('pt-BR'), { align: 'right' });
+    doc.fillColor(GRAY).fontSize(9).text('Data de emissão: ' + new Date().toLocaleDateString('pt-BR'), { align: 'right' });
     doc.moveDown(0.5);
 
-    // Dados do cliente
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('DADOS DO CLIENTE');
+    // 1. DADOS GERAIS DA OBRA
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('1. DADOS GERAIS DA OBRA');
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
-    doc.moveDown(0.3);
-    doc.fillColor(DARK).fontSize(10).font('Helvetica');
-    doc.text(`Nome: ${data.name}`);
-    doc.text(`Email: ${data.email}`);
-    if (data.phone) doc.text(`WhatsApp: ${data.phone}`);
-    doc.text(`País: ${data.countryLabel}`);
-    doc.moveDown(0.8);
-
-    // Escopo da obra
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('ESCOPO DA OBRA');
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
-    doc.moveDown(0.3);
-    doc.fillColor(DARK).fontSize(10).font('Helvetica');
-    doc.text(`Tipo de serviço: ${data.serviceLabel}`);
-    doc.text(`Área: ${data.area} m²`);
-    doc.text(`Padrão: ${data.standardLabel}`);
-    doc.text(`Material incluso: ${data.material === 'sim' ? 'Sim' : 'Não'}`);
-    doc.text(`Demolição: ${data.demolition === 'sim' ? 'Sim' : 'Não'}`);
-    if (data.description) {
-      doc.moveDown(0.3);
-      doc.fillColor(GRAY).text('Descrição: ' + data.description, { width: 495 });
-    }
-    doc.moveDown(0.8);
-
-    // Diagnóstico técnico
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('DIAGNÓSTICO TÉCNICO');
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
-    doc.moveDown(0.3);
-    doc.fillColor(DARK).fontSize(10).font('Helvetica')
-       .text(escopo.diagnostico, { width: 495 });
-    doc.moveDown(0.8);
-
-    // Alertas técnicos
-    if (escopo.alertas && escopo.alertas.length > 0) {
-      doc.fillColor('#856404').fontSize(11).font('Helvetica-Bold').text('⚠ ALERTAS TÉCNICOS');
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#856404').lineWidth(1).stroke();
-      doc.moveDown(0.3);
-      escopo.alertas.forEach(alerta => {
-        doc.fillColor('#856404').fontSize(10).font('Helvetica')
-           .text(`• ${alerta}`, { width: 495 });
-        doc.moveDown(0.2);
-      });
-      doc.moveDown(0.6);
-    }
-
-    // Estimativa de custo
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('ESTIMATIVA DE CUSTO');
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
-    doc.moveDown(0.3);
-    doc.fillColor(DARK).fontSize(10).font('Helvetica');
-    doc.text(`Custo base (${data.area} ${data.costs.unidade || 'm²'} × ${formatMoney(data.costs.pricePerUnit || 0, data.country)}/${data.costs.unidade || 'm²'}):  ${formatMoney(data.costs.base, data.country)}`);
-    if (data.costs.matAdd > 0) doc.text(`Material incluso (+20%):  ${formatMoney(data.costs.matAdd, data.country)}`);
-    if (data.costs.demAdd > 0) doc.text(`Demolição (+10%):  ${formatMoney(data.costs.demAdd, data.country)}`);
-    doc.moveDown(0.8);
-    const totalY = doc.y;
-    doc.rect(50, totalY, 495, 36).fill(LIGHT);
-    doc.fillColor(DARK).fontSize(13).font('Helvetica-Bold')
-       .text(`TOTAL ESTIMADO:  ${formatMoney(data.costs.total, data.country)}`, 60, totalY + 10, { width: 475 });
-    doc.moveDown(1.8);
-
-    // Cronograma detalhado
-    if (doc.y > 650) doc.addPage();
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('CRONOGRAMA DETALHADO DE EXECUÇÃO');
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
-    doc.moveDown(0.3);
-    escopo.etapas.forEach(etapa => {
-      if (doc.y > 680) doc.addPage();
-      doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
-         .text(`${etapa.numero}. ${etapa.titulo}  (${etapa.prazo})`, { width: 495 });
-      doc.fillColor(DARK).fontSize(10).font('Helvetica')
-         .text(etapa.descricao, { width: 480, indent: 15 });
-      doc.moveDown(0.5);
-    });
     doc.moveDown(0.4);
-
-    // Recomendações
-    if (doc.y > 650) doc.addPage();
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('RECOMENDAÇÕES TÉCNICAS');
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
-    doc.moveDown(0.3);
-    escopo.recomendacoes.forEach(rec => {
-      doc.fillColor(DARK).fontSize(10).font('Helvetica').text(`• ${rec}`, { width: 495 });
-      doc.moveDown(0.2);
-    });
+    doc.fillColor(DARK).fontSize(10).font('Helvetica');
+    doc.text(`• Cliente Final: ${data.name}`);
+    doc.text(`• Tipo de Serviço: ${data.serviceLabel}`);
+    doc.text(`• Área Aproximada: ${data.area} m²`);
+    doc.text(`• Padrão da Obra: ${data.standardLabel}`);
+    doc.text(`• Inclusão de Materiais: ${data.material === 'sim' ? 'Sim (Inclusos)' : 'Não (Apenas Mão de Obra)'}`);
+    doc.text(`• Demolição Inclusa: ${data.demolition === 'sim' ? 'Sim' : 'Não'}`);
+    if (data.description) {
+      doc.text(`• Características / Objetivo: ${data.description}`, { width: 495 });
+    }
     doc.moveDown(1);
 
+    // 2. ANÁLISE TÉCNICA INICIAL
+    if (doc.y > 650) doc.addPage();
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('2. ANÁLISE TÉCNICA INICIAL');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.4);
+    doc.fillColor(DARK).fontSize(10).font('Helvetica').text(escopo.analise_tecnica_inicial, { width: 495, align: 'justify' });
+    doc.moveDown(0.8);
+
+    // Alertas Técnicos (Se houver)
+    if (escopo.alertas && escopo.alertas.length > 0) {
+      doc.fillColor('#856404').fontSize(10).font('Helvetica-Bold').text('⚠ ALERTAS TÉCNICOS IDENTIFICADOS:');
+      escopo.alertas.forEach(alerta => {
+        doc.fillColor('#856404').font('Helvetica').text(`  - ${alerta}`, { width: 495 });
+      });
+      doc.moveDown(0.8);
+    }
+
+    // 3. ESCOPO DETALHADO DOS SERVIÇOS
+    if (doc.y > 600) doc.addPage();
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('3. ESCOPO DETALHADO DOS SERVIÇOS');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.4);
+
+    const esc = escopo.escopo_detalhado || {};
+    doc.fontSize(10).fillColor(DARK);
+    
+    doc.font('Helvetica-Bold').text('3.1 Demolições e Preparação do Ambiente');
+    doc.font('Helvetica').text(esc.demolicoes_preparacao || 'Não aplicável para este escopo.', { width: 495, indent: 10 });
+    doc.moveDown(0.4);
+
+    doc.font('Helvetica-Bold').text('3.2 Alvenaria e Adequações Estruturais');
+    doc.font('Helvetica').text(esc.alvenaria_adequacoes || 'Não aplicável para este escopo.', { width: 495, indent: 10 });
+    doc.moveDown(0.4);
+
+    if (doc.y > 680) doc.addPage();
+    doc.font('Helvetica-Bold').text('3.3 Instalações Elétricas e Infraestrutura');
+    doc.font('Helvetica').text(esc.instalacoes_eletricas || 'Não aplicável para este escopo.', { width: 495, indent: 10 });
+    doc.moveDown(0.4);
+
+    doc.font('Helvetica-Bold').text('3.4 Instalações Hidráulicas e Sanitárias');
+    doc.font('Helvetica').text(esc.instalacoes_hidraulicas || 'Não aplicável para este escopo.', { width: 495, indent: 10 });
+    doc.moveDown(0.4);
+
+    if (doc.y > 680) doc.addPage();
+    doc.font('Helvetica-Bold').text('3.5 Revestimentos e Acabamentos');
+    doc.font('Helvetica').text(esc.revestimentos_acabamentos || 'Não aplicável para este escopo.', { width: 495, indent: 10 });
+    doc.moveDown(0.4);
+
+    doc.font('Helvetica-Bold').text('3.6 Limpeza Técnica e Entrega');
+    doc.font('Helvetica').text(esc.limpeza_tecnica_entrega || 'Processo padrão de pós-obra e testes operacionais.', { width: 495, indent: 10 });
+    doc.moveDown(1);
+
+    // 4. ESTIMATIVA FINANCEIRA DETALHADA
+    if (doc.y > 550) doc.addPage();
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('4. ESTIMATIVA FINANCEIRA PREVISTA');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.4);
+    doc.fillColor(DARK).fontSize(10).font('Helvetica');
+    
+    doc.text(`• Custo Técnico Base (Mão de Obra): ${formatMoney(data.costs.base, data.country)}`);
+    if (data.costs.matAdd > 0) doc.text(`• Insumos / Materiais Diretos (+20%): ${formatMoney(data.costs.matAdd, data.country)}`);
+    if (data.costs.demAdd > 0) doc.text(`• Complexidade Adicional de Demolição (+10%): ${formatMoney(data.costs.demAdd, data.country)}`);
+    doc.text(`• Percentual de BDI Estimado e Taxas: Incluso nas margens de referência.`);
+    doc.moveDown(0.5);
+
+    const totalY = doc.y;
+    doc.rect(50, totalY, 495, 36).fill(LIGHT);
+    doc.fillColor(DARK).fontSize(12).font('Helvetica-Bold')
+       .text(`VALOR TOTAL ESTIMADO DA OBRA:  ${formatMoney(data.costs.total, data.country)}`, 60, totalY + 12, { width: 475 });
+    doc.moveDown(2);
+
+    // 5. CRONOGRAMA PREVISIONAL
+    if (doc.y > 600) doc.addPage();
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('5. CRONOGRAMA PREVISIONAL DE EXECUÇÃO');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.4);
+    if (escopo.cronograma_previsional && escopo.cronograma_previsional.length > 0) {
+      escopo.cronograma_previsional.forEach(cron => {
+        doc.fillColor(DARK).font('Helvetica-Bold').fontSize(10).text(`• ${cron.etapa} — Prazo: ${cron.prazo_estimated || cron.prazo_estimado || 'A definir'}`);
+        doc.font('Helvetica').fontSize(9).text(`  Logística: ${cron.sequencia_executiva}`, { width: 480 });
+        doc.moveDown(0.3);
+      });
+    } else {
+      doc.text('Cronograma sequencial padrão estimado em 8 a 15 dias úteis com base na metragem fornecida.');
+    }
+    doc.moveDown(0.8);
+
+    // 6. RECOMENDAÇÕES TÉCNICAS
+    if (doc.y > 600) doc.addPage();
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('6. RECOMENDAÇÕES TÉCNICAS PROFISSIONAIS');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.4);
+    doc.fillColor(DARK).fontSize(10).font('Helvetica');
+    if (escopo.recomendacoes_tecnicas && escopo.recomendacoes_tecnicas.length > 0) {
+      escopo.recomendacoes_tecnicas.forEach(rec => {
+        doc.text(`• ${rec}`, { width: 495 });
+        doc.moveDown(0.2);
+      });
+    } else {
+      doc.text('• Providenciar emissão de ART ou RRT junto aos conselhos de classe (CREA/CAU).\n• Certificar o uso correto de EPIs.\n• Executar compatibilização fina de projetos.');
+    }
+    doc.moveDown(0.8);
+
+    // 7. CONSIDERAÇÕES FINAIS
+    if (doc.y > 600) doc.addPage();
+    doc.fillColor(GREEN).fontSize(12).font('Helvetica-Bold').text('7. CONSIDERAÇÕES FINAIS');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.4);
+    doc.fillColor(DARK).fontSize(10).font('Helvetica').text(escopo.consideracoes_finais || 'Este orçamento considera tabelas de custos de referência padrão (SINAPI/CUB). Mudanças nos padrões de acabamento escolhidos pelo comprador impactam diretamente o valor real de aquisição.', { width: 495, align: 'justify' });
+
     // Rodapé
-    doc.rect(0, doc.page.height - 45, doc.page.width, 45).fill(GREEN);
-    doc.fillColor('white').fontSize(8)
-       .text('Este orçamento é uma estimativa baseada em análise técnica e parâmetros de mercado (SINAPI/CUB). Os valores podem variar conforme condições locais e escopo definitivo. Recomendada vistoria técnica presencial antes da contratação.', 50, doc.page.height - 38, { width: 495, align: 'center' });
+    doc.rect(0, doc.page.height - 40, doc.page.width, 40).fill(GREEN);
+    doc.fillColor('white').fontSize(7.5)
+       .text('Este documento constitui uma estimativa de custos paramétrica. Indispensável a realização de vistoria em campo e elaboração do projeto executivo final antes da contratação dos serviços.', 50, doc.page.height - 32, { width: 495, align: 'center' });
 
     doc.end();
     stream.on('finish', () => resolve(filePath));
@@ -380,14 +398,15 @@ async function sendEmail(toEmail, name, pdfPath) {
         </div>
         <div style="background:#f9f9f9;padding:24px;border-radius:0 0 12px 12px;border:1px solid #eee">
           <p>Olá, <strong>${name}</strong>!</p>
-          <p>Seu orçamento técnico profissional está pronto e segue em anexo.</p>
+          <p>Seu orçamento técnico profissional completo foi gerado e segue em anexo em formato PDF oficial.</p>
           <ul>
-            <li>✅ Diagnóstico técnico personalizado</li>
-            <li>⚠️ Alertas de problemas identificados</li>
-            <li>📅 Cronograma detalhado por etapas</li>
-            <li>💡 Recomendações do especialista</li>
+            <li>✅ 1. Dados Gerais e Parâmetros</li>
+            <li>📊 2. Análise Técnica Inicial</li>
+            <li>🧱 3. Escopo Detalhado (Subitens Técnicos)</li>
+            <li>💰 4. Estimativa Financeira Paramétrica</li>
+            <li>📅 5. Cronograma Executivo e Recomendações</li>
           </ul>
-          <p style="color:#888;font-size:12px">Este orçamento é uma estimativa. Recomendamos vistoria técnica presencial.</p>
+          <p style="color:#888;font-size:12px">Este orçamento é estruturado de forma automatizada por inteligência artificial avançada.</p>
           <p><strong>Equipe Orçamento de Obra Rápido</strong></p>
         </div>
       </div>`,
