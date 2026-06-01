@@ -13,7 +13,8 @@ const app = express();
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'], allowedHeaders: ['Content-Type'] }));
 app.use('/webhook', express.raw({ type: 'application/json' }));
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // ─── KEEP-ALIVE ───────────────────────────────────────────────────────────────
 const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 10000}`;
@@ -89,19 +90,6 @@ const SERVICE_LABELS = {
   fachada: 'Fachada / Área Externa', ar_condicionado: 'Ar Condicionado'
 };
 
-const TIMELINES = {
-  reforma_geral:   ['Levantamento e projeto (3 dias)', 'Demolição e preparação (5 dias)', 'Estrutura e alvenaria (7 dias)', 'Instalações elétricas e hidráulicas (5 dias)', 'Revestimentos e acabamentos (8 dias)', 'Pintura e limpeza final (4 dias)'],
-  banheiro:        ['Demolição e remoção (2 dias)', 'Impermeabilização (2 dias)', 'Instalações hidráulicas (3 dias)', 'Revestimento e louças (4 dias)', 'Acabamento final (2 dias)'],
-  cozinha:         ['Projeto e marcenaria (3 dias)', 'Instalação elétrica/hidráulica (3 dias)', 'Revestimentos (3 dias)', 'Móveis e equipamentos (4 dias)', 'Acabamento (2 dias)'],
-  pintura:         ['Preparação de superfícies (2 dias)', 'Primeira demão (2 dias)', 'Correções e massa corrida (1 dia)', 'Segunda demão e acabamento (2 dias)'],
-  eletrica:        ['Projeto elétrico (2 dias)', 'Abertura de rasgos (2 dias)', 'Passagem de conduítes (3 dias)', 'Cabeamento e conexões (3 dias)', 'Quadro elétrico e testes (2 dias)'],
-  hidraulica:      ['Projeto hidráulico (1 dia)', 'Abertura de rasgos (2 dias)', 'Tubulação e conexões (3 dias)', 'Testes de pressão (1 dia)', 'Acabamentos e louças (2 dias)'],
-  piso:            ['Retirada do piso existente (2 dias)', 'Regularização de contrapiso (2 dias)', 'Assentamento (4 dias)', 'Rejuntamento e limpeza (2 dias)'],
-  construcao:      ['Fundação (15 dias)', 'Estrutura (20 dias)', 'Alvenaria (12 dias)', 'Cobertura (8 dias)', 'Instalações (10 dias)', 'Acabamentos (15 dias)', 'Vistoria final (3 dias)'],
-  fachada:         ['Andaimes e segurança (2 dias)', 'Limpeza e preparação (3 dias)', 'Reparos estruturais (3 dias)', 'Aplicação de revestimento (5 dias)', 'Pintura e acabamento (4 dias)'],
-  ar_condicionado: ['Vistoria técnica e projeto (1 dia)', 'Instalação das unidades (1 dia)', 'Passagem de tubulação e elétrica (1 dia)', 'Teste e comissionamento (1 dia)']
-};
-
 // ─── CÁLCULO DE VALOR ─────────────────────────────────────────────────────────
 function calcValue(country, standard, area, material, demolition, service) {
   const region = SERVICE_PRICES[country] || SERVICE_PRICES.global;
@@ -122,8 +110,115 @@ function formatMoney(val, country) {
   return info.symbol + ' ' + val.toLocaleString('en-US');
 }
 
-// ─── GERAR PDF ────────────────────────────────────────────────────────────────
-async function generatePDF(data) {
+// ─── ANÁLISE IA COM GEMINI ────────────────────────────────────────────────────
+async function analisarComIA(data) {
+  const { service, area, standard, material, demolition, description, photos, pdf } = data;
+  const temMidia = (photos && photos.length > 0) || pdf;
+
+  const prompt = `Você é o Eng. Rafael, engenheiro civil sênior com 20 anos de experiência, CREA ativo.
+
+DADOS DO PROJETO:
+- Serviço: ${SERVICE_LABELS[service] || service}
+- Área: ${area} m²
+- Padrão: ${standard}
+- Material incluso: ${material === 'sim' ? 'Sim' : 'Não'}
+- Demolição: ${demolition === 'sim' ? 'Sim' : 'Não'}
+- Descrição do cliente: ${description || 'Não informada'}
+${temMidia ? '- Arquivos enviados: analisados acima (fotos/PDF)' : ''}
+
+Gere um ESCOPO TÉCNICO DETALHADO em JSON com EXATAMENTE este formato (responda APENAS o JSON, sem texto adicional, sem markdown):
+{
+  "diagnostico": "Diagnóstico técnico objetivo em 2-3 frases, citando problemas específicos identificados nas imagens/documentos",
+  "alertas": ["alerta técnico específico 1", "alerta técnico específico 2", "alerta técnico específico 3"],
+  "etapas": [
+    {"numero": 1, "titulo": "Nome da etapa", "descricao": "Descrição técnica detalhada: o que será feito, como, com quais materiais e técnica", "prazo": "X dias"},
+    {"numero": 2, "titulo": "Nome da etapa", "descricao": "...", "prazo": "X dias"}
+  ],
+  "recomendacoes": ["recomendação específica 1", "recomendação específica 2", "recomendação específica 3", "recomendação específica 4"]
+}
+
+REGRAS:
+- Seja ESPECÍFICO ao que foi visto nas fotos/PDF/descrição
+- Se houver infiltração, mofo, trincas, descascamento — cite e detalhe o tratamento (ex: raspagem, selador antimofo, impermeabilizante)
+- Mínimo 4 etapas, máximo 8
+- Cada etapa com descrição técnica real e detalhada
+- Responda APENAS o JSON válido`;
+
+  // Monta parts do Gemini
+  const parts = [];
+
+  // Adiciona fotos
+  if (photos && photos.length > 0) {
+    photos.forEach(photo => {
+      parts.push({
+        inline_data: {
+          mime_type: photo.mediaType,
+          data: photo.base64
+        }
+      });
+    });
+  }
+
+  // Adiciona PDF
+  if (pdf) {
+    parts.push({
+      inline_data: {
+        mime_type: 'application/pdf',
+        data: pdf.base64
+      }
+    });
+  }
+
+  // Adiciona o prompt de texto
+  parts.push({ text: prompt });
+
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [{ parts }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 2000
+        }
+      },
+      { timeout: 60000 }
+    );
+
+    const text = response.data.candidates[0].content.parts[0].text.trim();
+    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const result = JSON.parse(clean);
+    console.log('✅ Análise IA concluída com Gemini');
+    return result;
+
+  } catch (err) {
+    console.error('Erro na análise Gemini:', err.response?.data || err.message);
+    // Fallback escopo genérico
+    return {
+      diagnostico: `Projeto de ${SERVICE_LABELS[service] || service} em área de ${area} m², padrão ${standard}. Análise baseada nas informações fornecidas pelo cliente.`,
+      alertas: [
+        'Verifique a necessidade de impermeabilização antes de iniciar',
+        'Confirme o estado das instalações existentes',
+        'Avalie a necessidade de tratamento de umidade ou mofo'
+      ],
+      etapas: [
+        { numero: 1, titulo: 'Vistoria e preparação', descricao: 'Vistoria técnica detalhada do local, remoção de materiais soltos, limpeza geral e proteção de áreas adjacentes', prazo: '1 dia' },
+        { numero: 2, titulo: 'Tratamentos especiais', descricao: `Tratamento de patologias identificadas: raspagem de tinta solta, aplicação de selador e correção de irregularidades superficiais`, prazo: '2 dias' },
+        { numero: 3, titulo: 'Execução principal', descricao: `Execução do serviço de ${SERVICE_LABELS[service] || service} conforme especificações técnicas e padrão ${standard}`, prazo: '4 dias' },
+        { numero: 4, titulo: 'Acabamento e entrega', descricao: 'Aplicação de acabamentos finais, verificação de qualidade, limpeza geral e entrega da obra ao cliente', prazo: '1 dia' }
+      ],
+      recomendacoes: [
+        'Solicite nota fiscal de todos os materiais adquiridos',
+        'Verifique registro do profissional no CREA ou CAU',
+        'Documente cada etapa com fotos para controle de qualidade',
+        'Obtenha ao menos 3 orçamentos de mão de obra antes de contratar'
+      ]
+    };
+  }
+}
+
+// ─── GERAR PDF COM ESCOPO PERSONALIZADO ──────────────────────────────────────
+async function generatePDF(data, escopo) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     const filePath = path.join('/tmp', `orcamento_${Date.now()}.pdf`);
@@ -132,15 +227,18 @@ async function generatePDF(data) {
 
     const GREEN = '#1D9E75', DARK = '#085041', GRAY = '#5F5E5A', LIGHT = '#E1F5EE';
 
+    // Cabeçalho
     doc.rect(0, 0, doc.page.width, 80).fill(GREEN);
     doc.fillColor('white').fontSize(22).font('Helvetica-Bold')
        .text('Orçamento de Obra Rápido', 50, 20);
     doc.fontSize(10).font('Helvetica')
        .text('Análise técnica profissional · orcamentodeobrarapido.com', 50, 50);
     doc.moveDown(3);
-    doc.fillColor(GRAY).fontSize(9).text('Gerado em: ' + new Date().toLocaleDateString('pt-BR'), { align: 'right' });
+    doc.fillColor(GRAY).fontSize(9)
+       .text('Gerado em: ' + new Date().toLocaleDateString('pt-BR'), { align: 'right' });
     doc.moveDown(0.5);
 
+    // Dados do cliente
     doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('DADOS DO CLIENTE');
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
@@ -151,6 +249,7 @@ async function generatePDF(data) {
     doc.text(`País: ${data.countryLabel}`);
     doc.moveDown(0.8);
 
+    // Escopo da obra
     doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('ESCOPO DA OBRA');
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
@@ -160,9 +259,34 @@ async function generatePDF(data) {
     doc.text(`Padrão: ${data.standardLabel}`);
     doc.text(`Material incluso: ${data.material === 'sim' ? 'Sim' : 'Não'}`);
     doc.text(`Demolição: ${data.demolition === 'sim' ? 'Sim' : 'Não'}`);
-    if (data.description) { doc.moveDown(0.3); doc.fillColor(GRAY).text('Descrição: ' + data.description, { width: 495 }); }
+    if (data.description) {
+      doc.moveDown(0.3);
+      doc.fillColor(GRAY).text('Descrição: ' + data.description, { width: 495 });
+    }
     doc.moveDown(0.8);
 
+    // Diagnóstico técnico
+    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('DIAGNÓSTICO TÉCNICO');
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
+    doc.moveDown(0.3);
+    doc.fillColor(DARK).fontSize(10).font('Helvetica')
+       .text(escopo.diagnostico, { width: 495 });
+    doc.moveDown(0.8);
+
+    // Alertas técnicos
+    if (escopo.alertas && escopo.alertas.length > 0) {
+      doc.fillColor('#856404').fontSize(11).font('Helvetica-Bold').text('⚠ ALERTAS TÉCNICOS');
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#856404').lineWidth(1).stroke();
+      doc.moveDown(0.3);
+      escopo.alertas.forEach(alerta => {
+        doc.fillColor('#856404').fontSize(10).font('Helvetica')
+           .text(`• ${alerta}`, { width: 495 });
+        doc.moveDown(0.2);
+      });
+      doc.moveDown(0.6);
+    }
+
+    // Estimativa de custo
     doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('ESTIMATIVA DE CUSTO');
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
@@ -177,30 +301,36 @@ async function generatePDF(data) {
        .text(`TOTAL ESTIMADO:  ${formatMoney(data.costs.total, data.country)}`, 60, totalY + 10, { width: 475 });
     doc.moveDown(1.8);
 
-    const timeline = TIMELINES[data.service] || TIMELINES.reforma_geral;
-    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('CRONOGRAMA DE EXECUÇÃO');
+    // Cronograma detalhado
+    if (doc.y > 650) doc.addPage();
+    doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('CRONOGRAMA DETALHADO DE EXECUÇÃO');
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
-    timeline.forEach((step, i) => {
-      doc.fillColor(DARK).fontSize(10).font('Helvetica').text(`${i + 1}. ${step}`, 50, doc.y, { width: 495 });
-      doc.moveDown(0.2);
+    escopo.etapas.forEach(etapa => {
+      if (doc.y > 680) doc.addPage();
+      doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
+         .text(`${etapa.numero}. ${etapa.titulo}  (${etapa.prazo})`, { width: 495 });
+      doc.fillColor(DARK).fontSize(10).font('Helvetica')
+         .text(etapa.descricao, { width: 480, indent: 15 });
+      doc.moveDown(0.5);
     });
-    doc.moveDown(0.6);
+    doc.moveDown(0.4);
 
+    // Recomendações
+    if (doc.y > 650) doc.addPage();
     doc.fillColor(GREEN).fontSize(11).font('Helvetica-Bold').text('RECOMENDAÇÕES TÉCNICAS');
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(GREEN).lineWidth(1).stroke();
     doc.moveDown(0.3);
-    doc.fillColor(DARK).fontSize(10).font('Helvetica')
-       .text('• Solicite nota fiscal de todos os materiais adquiridos.')
-       .text('• Verifique se o profissional possui registro no CREA ou CAU.')
-       .text('• Documente cada etapa com fotos para controle de qualidade.')
-       .text('• Solicite pelo menos 3 orçamentos de mão de obra.')
-       .text('• Recomenda-se acompanhamento técnico de engenheiro ou arquiteto.');
+    escopo.recomendacoes.forEach(rec => {
+      doc.fillColor(DARK).fontSize(10).font('Helvetica').text(`• ${rec}`, { width: 495 });
+      doc.moveDown(0.2);
+    });
     doc.moveDown(1);
 
+    // Rodapé
     doc.rect(0, doc.page.height - 45, doc.page.width, 45).fill(GREEN);
     doc.fillColor('white').fontSize(8)
-       .text('Este orçamento é uma estimativa baseada em parâmetros médios de mercado (SINAPI/CUB). Os valores podem variar conforme condições locais, mão de obra e escopo definitivo.', 50, doc.page.height - 38, { width: 495, align: 'center' });
+       .text('Este orçamento é uma estimativa baseada em análise técnica e parâmetros de mercado (SINAPI/CUB). Os valores podem variar conforme condições locais e escopo definitivo. Recomendada vistoria técnica presencial antes da contratação.', 50, doc.page.height - 38, { width: 495, align: 'center' });
 
     doc.end();
     stream.on('finish', () => resolve(filePath));
@@ -208,10 +338,9 @@ async function generatePDF(data) {
   });
 }
 
-// ─── ENVIAR EMAIL VIA RESEND (API HTTP — funciona no Render gratuito) ──────────
+// ─── ENVIAR EMAIL VIA RESEND ──────────────────────────────────────────────────
 async function sendEmail(toEmail, name, pdfPath) {
   const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
-
   const response = await axios.post('https://api.resend.com/emails', {
     from: 'Orçamento de Obra Rápido <onboarding@resend.dev>',
     to: [toEmail],
@@ -224,28 +353,23 @@ async function sendEmail(toEmail, name, pdfPath) {
         <div style="background:#f9f9f9;padding:24px;border-radius:0 0 12px 12px;border:1px solid #eee">
           <p>Olá, <strong>${name}</strong>!</p>
           <p>Seu orçamento técnico profissional está pronto e segue em anexo.</p>
-          <p>O documento contém:</p>
           <ul>
-            <li>✅ Estimativa de custo com base técnica</li>
-            <li>📅 Cronograma completo por etapas</li>
+            <li>✅ Diagnóstico técnico personalizado</li>
+            <li>⚠️ Alertas de problemas identificados</li>
+            <li>📅 Cronograma detalhado por etapas</li>
             <li>💡 Recomendações do especialista</li>
-            <li>⚠️ Alertas de custos adicionais</li>
           </ul>
-          <p style="color:#888;font-size:12px">Este orçamento é uma estimativa. Recomendamos vistoria técnica presencial antes da contratação.</p>
+          <p style="color:#888;font-size:12px">Este orçamento é uma estimativa. Recomendamos vistoria técnica presencial.</p>
           <p><strong>Equipe Orçamento de Obra Rápido</strong></p>
         </div>
       </div>`,
-    attachments: [{
-      filename: 'orcamento-tecnico.pdf',
-      content: pdfBase64
-    }]
+    attachments: [{ filename: 'orcamento-tecnico.pdf', content: pdfBase64 }]
   }, {
     headers: {
       'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json'
     }
   });
-
   console.log('📧 Email enviado via Resend:', response.data.id);
 }
 
@@ -255,7 +379,7 @@ async function sendWhatsApp(phone, name, pdfPath) {
   const cleanPhone = phone.replace(/\D/g, '');
   await axios.post(
     `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE}/token/${process.env.ZAPI_TOKEN}/send-text`,
-    { phone: cleanPhone, message: `🏗️ Olá, ${name}! Seu orçamento técnico profissional está pronto. Em instantes você receberá o PDF completo.\n\n— Orçamento de Obra Rápido` }
+    { phone: cleanPhone, message: `🏗️ Olá, ${name}! Seu orçamento técnico profissional está pronto.\n\n— Orçamento de Obra Rápido` }
   );
   const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
   await axios.post(
@@ -271,27 +395,37 @@ const FREE_ACCESS_EMAILS = [
   'rogerio@orcamentodeobrarapido.com.br'
 ];
 
+// ─── HELPER ───────────────────────────────────────────────────────────────────
+function buildData(fields) {
+  const { name, email, phone, country, service, area, standard, material, demolition, description, photos, pdf } = fields;
+  const costs = calcValue(country, standard, parseFloat(area), material, demolition, service);
+  return {
+    name, email, phone, country,
+    countryLabel: { br: 'Brasil', us: 'Estados Unidos', eu: 'Europa', global: 'Internacional' }[country] || country,
+    service, serviceLabel: SERVICE_LABELS[service] || service,
+    area: parseFloat(area), standard,
+    standardLabel: { basico: 'Básico', medio: 'Médio', alto: 'Alto Padrão' }[standard] || standard,
+    material, demolition, description: description || '',
+    photos: photos || [], pdf: pdf || null, costs
+  };
+}
+
 // ─── ROTA: ACESSO GRATUITO ────────────────────────────────────────────────────
 app.post('/free-access', async (req, res) => {
   try {
-    const { name, email, phone, country, service, area, standard, material, demolition, description } = req.body;
-    if (!FREE_ACCESS_EMAILS.includes((email || '').toLowerCase().trim())) {
+    const data = buildData(req.body);
+    if (!FREE_ACCESS_EMAILS.includes((data.email || '').toLowerCase().trim())) {
       return res.status(403).json({ error: 'Email não autorizado para acesso gratuito.' });
     }
-    const costs = calcValue(country, standard, parseFloat(area), material, demolition, service);
-    const data = {
-      name, email, phone, country,
-      countryLabel: { br: 'Brasil', us: 'Estados Unidos', eu: 'Europa', global: 'Internacional' }[country] || country,
-      service, serviceLabel: SERVICE_LABELS[service] || service,
-      area: parseFloat(area), standard,
-      standardLabel: { basico: 'Básico', medio: 'Médio', alto: 'Alto Padrão' }[standard] || standard,
-      material, demolition, description: description || '', costs
-    };
-    const pdfPath = await generatePDF(data);
-    await sendEmail(email, name, pdfPath);
-    if (phone) await sendWhatsApp(phone, name, pdfPath);
+    console.log(`🔍 Analisando projeto com Gemini para ${data.email}...`);
+    const escopo = await analisarComIA(data);
+    console.log(`📄 Gerando PDF personalizado...`);
+    const pdfPath = await generatePDF(data, escopo);
+    console.log(`📧 Enviando email...`);
+    await sendEmail(data.email, data.name, pdfPath);
+    if (data.phone) await sendWhatsApp(data.phone, data.name, pdfPath);
     fs.unlinkSync(pdfPath);
-    console.log(`✅ Acesso gratuito entregue para ${email}`);
+    console.log(`✅ Acesso gratuito entregue para ${data.email}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('Erro no acesso gratuito:', err.message);
@@ -320,7 +454,7 @@ app.post('/create-checkout', async (req, res) => {
       payment_method_options: info.currency === 'brl' ? { boleto: { expires_after_days: 3 } } : {},
       success_url: `${process.env.FRONTEND_URL}/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}`,
-      metadata: { name, email, phone, country, service, area, standard, material, demolition, description: description || '' }
+      metadata: { name, email, phone: phone || '', country, service, area: String(area), standard, material, demolition, description: description || '' }
     });
     res.json({ url: session.url });
   } catch (err) {
@@ -329,7 +463,7 @@ app.post('/create-checkout', async (req, res) => {
   }
 });
 
-// ─── ROTA: WEBHOOK STRIPE ─────────────────────────────────────────────────────
+// ─── WEBHOOK STRIPE ───────────────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -341,17 +475,10 @@ app.post('/webhook', async (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const m = session.metadata;
-    const costs = calcValue(m.country, m.standard, parseFloat(m.area), m.material, m.demolition, m.service);
-    const data = {
-      name: m.name, email: m.email, phone: m.phone, country: m.country,
-      countryLabel: { br: 'Brasil', us: 'Estados Unidos', eu: 'Europa', global: 'Internacional' }[m.country] || m.country,
-      service: m.service, serviceLabel: SERVICE_LABELS[m.service] || m.service,
-      area: parseFloat(m.area), standard: m.standard,
-      standardLabel: { basico: 'Básico', medio: 'Médio', alto: 'Alto Padrão' }[m.standard] || m.standard,
-      material: m.material, demolition: m.demolition, description: m.description, costs
-    };
+    const data = buildData({ ...m, photos: [], pdf: null });
     try {
-      const pdfPath = await generatePDF(data);
+      const escopo = await analisarComIA(data);
+      const pdfPath = await generatePDF(data, escopo);
       await sendEmail(data.email, data.name, pdfPath);
       if (data.phone) await sendWhatsApp(data.phone, data.name, pdfPath);
       fs.unlinkSync(pdfPath);
